@@ -1,6 +1,11 @@
 from board.move import move
 from pieces.nullpiece import nullpiece
 from pieces.queen import queen
+from pieces.bishop import bishop
+from pieces.king import king
+from pieces.knight import knight
+from pieces.pawn import pawn
+from pieces.rook import rook
 import random
 
 class AI:
@@ -249,46 +254,149 @@ class AI:
             arr.append([y,x,move[0],move[1],mk])
         return arr
 
+    # Helper function to determine if a piece is under threat
+    def is_under_threat(self, x, y, gametiles, threatening_color):
+        for i in range(8):
+            for j in range(8):
+                piece = gametiles[i][j].pieceonTile
+                if piece.alliance == threatening_color:
+                    legal_moves = piece.legalmoveb(gametiles)
+                    if legal_moves is None:
+                        continue
+                    if [x,y] in legal_moves:
+                        return True
+        return False
 
-    def calculateb(self,gametiles):
-        value=0
+    # Helper function to determine if the King is in checkmate  
+    def is_checkmated(self, gametiles, defending_color):
+        for i in range(8):
+            for j in range(8):
+                piece = gametiles[i][j].pieceonTile
+                if piece.alliance == defending_color:  
+                    legal_moves = piece.legalmoveb(gametiles)
+                    if legal_moves is None:
+                        continue
+                    else:
+                        return False
+        return True
+
+    
+    def calculateb(self, gametiles):
+        value = 0
         for x in range(8):
             for y in range(8):
-                    if gametiles[y][x].pieceonTile.tostring()=='P':
-                        value=value-100
+                piece = gametiles[y][x].pieceonTile
+                piece_value = 0
 
-                    if gametiles[y][x].pieceonTile.tostring()=='N':
-                        value=value-350
+                # Simplifying the original logic with a dictionary lookup:
+                piece_values = {
+                    'P': -100, 'N': -300, 'B': -300, 'R': -500, 'Q': -1000, 'K': -10000,
+                    'p': 100, 'n': 300, 'b': 300, 'r': 500, 'q': 1000, 'k': 10000
+                }
 
-                    if gametiles[y][x].pieceonTile.tostring()=='B':
-                        value=value-350
+                piece_value = piece_values.get(piece.tostring(), 0)
 
-                    if gametiles[y][x].pieceonTile.tostring()=='R':
-                        value=value-525
+                # experimental code that is not working now
+                '''
+                # If the piece is black and is under threat by a white piece, adjust the value.
+                if piece.alliance == "Black" and self.is_under_threat(x, y, gametiles, "White"):
+                    piece_value += piece_value//4  # Penalize based on piece value
+                    
+                # If the piece is white and is under threat by a black piece, adjust the value.
+                elif piece.alliance == "White" and self.is_under_threat(x, y, gametiles, "Black"):
+                    piece_value -= piece_value//4  # Penalize based on piece value
+                '''
 
-                    if gametiles[y][x].pieceonTile.tostring()=='Q':
-                        value=value-1000
+                # encourages control over the center
+                proximity_to_center_x = abs(x-3)
+                proximity_to_center_y = abs(y-3)
 
-                    if gametiles[y][x].pieceonTile.tostring()=='K':
-                        value=value-10000
+                proximity_to_center = proximity_to_center_x + proximity_to_center_y
+                if piece.alliance == 'Black':
+                    piece_value -= proximity_to_center
+                elif piece.alliance == 'White':
+                    piece_value += proximity_to_center
 
-                    if gametiles[y][x].pieceonTile.tostring()=='p':
-                        value=value+100
+                # encourages pawns to defend pieces
+                if piece.tostring() == 'P':
+                    if (x<7):
+                        if(y+1>7):
+                            if(gametiles[x+1][y-1].pieceonTile.alliance=='Black'):
+                                piece_value -= 20
+                        if(y-1<0):
+                            if(gametiles[x+1][y+1].pieceonTile.alliance=='Black'):
+                                piece_value -= 20
+                        if(y+1<8 and y-1>=0):
+                            if(gametiles[x+1][y-1].pieceonTile.alliance=='Black'):
+                                piece_value -= 20
+                            if(gametiles[x+1][y+1].pieceonTile.alliance=='Black'):
+                                piece_value -= 20
+                    # rewards pawns being promoted
+                    if (x==7):
+                        piece_value -= 350
 
-                    if gametiles[y][x].pieceonTile.tostring()=='n':
-                        value=value+350
+                if piece.tostring() == 'p':
+                    if (x>0):
+                        if(y+1>7):
+                            if(gametiles[x-1][y-1].pieceonTile.alliance=='White'):
+                                piece_value += 20
+                        if(y-1<0):
+                            if(gametiles[x-1][y+1].pieceonTile.alliance=='White'):
+                                piece_value += 20
+                        if(y+1<8 and y-1>=0):
+                            if(gametiles[x-1][y-1].pieceonTile.alliance=='White'):
+                                piece_value += 20
+                            if(gametiles[x-1][y+1].pieceonTile.alliance=='White'):
+                                piece_value += 20
+                    if (x==0):
+                        piece_value += 350
 
-                    if gametiles[y][x].pieceonTile.tostring()=='b':
-                        value=value+350
+                if piece.tostring() == 'k':
+                    if self.is_under_threat(x, y, gametiles, 'Black'):
+                        piece_value -= 100
+                    if x>0:
+                        if self.is_under_threat(x-1, y, gametiles, 'Black'):
+                            piece_value -= 2
+                    if y>0:
+                        if self.is_under_threat(x, y-1, gametiles, 'Black'):
+                            piece_value -= 2
+                    if y>0 and x>0:
+                        if self.is_under_threat(x-1, y-1, gametiles, 'Black'):
+                            piece_value -= 2
+                    if x<7:
+                        if self.is_under_threat(x+1, y, gametiles, 'Black'):
+                            piece_value -= 2
+                    if y<7:
+                        if self.is_under_threat(x, y+1, gametiles, 'Black'):
+                            piece_value -= 2
+                    if y<7 and x<7:
+                        if self.is_under_threat(x-1, y+1, gametiles, 'Black'):
+                            piece_value -= 2
 
-                    if gametiles[y][x].pieceonTile.tostring()=='r':
-                        value=value+525
+                # Tries to encourage development of pieces
 
-                    if gametiles[y][x].pieceonTile.tostring()=='q':
-                        value=value+1000
+                if piece.tostring() == 'B':
+                    if y == 0 and x == 5:
+                        piece_value += 15
+                    if y == 0 and x == 2:
+                        piece_value += 15
 
-                    if gametiles[y][x].pieceonTile.tostring()=='k':
-                        value=value+10000
+
+                if piece.tostring() == 'N':
+                    if y == 0 and x == 6:
+                        piece_value += 15
+                    if y == 0 and x == 1:
+                        piece_value += 15
+
+                value += piece_value
+
+        # tries to get the AI to go for checkmates 
+        if self.is_checkmated(gametiles, 'White'):
+            value -= 1000
+        if self.is_checkmated(gametiles, 'Black'):
+            value += 1000
+        
+        
 
         return value
 
@@ -297,7 +405,7 @@ class AI:
         promotion=False
         if gametiles[y][x].pieceonTile.tostring()=='K' or gametiles[y][x].pieceonTile.tostring()=='R':
             gametiles[y][x].pieceonTile.moved=True
-
+     
         if gametiles[y][x].pieceonTile.tostring()=='K' and m==x+2:
             gametiles[y][x+1].pieceonTile=gametiles[y][x+3].pieceonTile
             s=self.updateposition(y,x+1)
